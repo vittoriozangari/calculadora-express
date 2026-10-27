@@ -105,6 +105,7 @@ button:focus-visible, input:focus-visible, select:focus-visible{outline:2px soli
 .seg.mini button{padding:5px 9px; font-size:12.5px}
 .line > .seg.mini{margin-top:0; min-width:150px}
 .line > .seg.mini button{padding:7px 12px; font-size:14px}
+.dpsel{margin-top:4px; width:112px} .dpsel select{font-size:15px; padding:7px 28px 6px 10px}
 .dpf{width:clamp(130px,38vw,170px)}
 .dpf input{text-align:right}
 /* Key rows: Final Price, Down Payment, Monthly Payments — same weight, same size */
@@ -152,7 +153,7 @@ button:focus-visible, input:focus-visible, select:focus-visible{outline:2px soli
   <div class="sheet">
     <div class="line key"><div><div class="k">Final Price</div><div class="s" id="oFinalS"></div></div><div class="v" id="oFinal">$0</div></div>
     <div class="line key"><div><div class="k">Down Payment</div>
-      <div class="seg mini" id="dpMode"><button type="button" data-v="10">10%</button><button type="button" data-v="20">20%</button><button type="button" data-v="man">Manual</button></div></div>
+      <div class="fld sel dpsel"><select id="dpMode" aria-label="Down payment %"><option value="10">10%</option><option value="15">15%</option><option value="20">20%</option><option value="man">Manual</option></select></div></div>
       <div class="fld dpf"><label for="dpAmt">New Money</label><input id="dpAmt" inputmode="decimal" data-fmt="money"></div></div>
     <div class="line key pay"><div><div class="k">Monthly Payments</div><div class="s" id="oPayS"></div></div><div class="v" id="oPay">$0</div></div>
     <div class="line"><div><div class="k">Interest</div><div class="s" id="oRateS"></div></div><div class="v" id="oRate">0%</div></div>
@@ -192,7 +193,7 @@ const PKGS = [20700,25800,30500,51700,67100,95700,134200,148100,176700];
 for (let p = 25000; p <= 999000; p += 1000) PKGS.push(p);
 PKGS.sort((a,b) => a-b);
 
-const DEF = {cp:'3,000', price:'', mode:'lvl', prod:'EY', lvl:'10000', opts:'', trades:[{p:'25,000', d:'2,000', r:'13.99'}], dpMode:'10', dpAmt:'', term:'120', encDate:''};
+const DEF = {cp:'3,000', price:'', mode:'lvl', prod:'EY', lvl:'10000', opts:'', trades:[{p:'25,000', d:'2,000', r:'13.99', auto:false}], dpMode:'10', dpAmt:'', term:'120', encDate:''};
 const KEY = 'aventuraExpres.v2';
 let S; try { S = Object.assign(structuredClone(DEF), JSON.parse(localStorage.getItem(KEY) || '{}')); } catch(e){ S = structuredClone(DEF); }
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch(e){} };
@@ -234,7 +235,7 @@ function calc(){
   const incr = Math.max(0, netInc - disc);
   const newMoney = S.dpMode === 'man' ? Math.max(0, c2(P(S.dpAmt)))
     : S.dpMode === '20' ? Math.max(0, c2(base * 0.20 - equity), c2(incr * 0.20))
-    : Math.max(0, c2(base * 0.10 - equity));
+    : Math.max(0, c2(base * P(S.dpMode) / 100 - equity));
   const dp = c2(equity + newMoney);
   const dpPct = base > 0 ? dp / base * 100 : 0;
   const amount = c2(base - (equity + newMoney) + closing);
@@ -320,7 +321,7 @@ function fill(){
   $('cp').value = S.cp; $('price').value = S.price; $('opts').value = S.opts;
   $('dpAmt').value = S.dpMode === 'man' ? S.dpAmt : '';
   $('dpAmt').readOnly = S.dpMode !== 'man';
-  setSeg('mode', S.mode); $('prod').value = S.prod; setSeg('dpMode', S.dpMode); setSeg('term', S.term);
+  setSeg('mode', S.mode); $('prod').value = S.prod; $('dpMode').value = S.dpMode; setSeg('term', S.term);
   $('lvlBox').hidden = S.mode !== 'lvl'; $('optBox').hidden = S.mode !== 'opt';
   renderLevels(); renderTrades();
 }
@@ -331,7 +332,11 @@ document.addEventListener('input', e => {
   else if (el.id === 'price') S.price = el.value;
   else if (el.id === 'opts') S.opts = el.value;
   else if (el.id === 'dpAmt'){ S.dpAmt = el.value; }
-  else if (el.dataset.i !== undefined) S.trades[+el.dataset.i][el.dataset.f] = el.value;
+  else if (el.dataset.i !== undefined){
+    const t = S.trades[+el.dataset.i]; t[el.dataset.f] = el.value;
+    if (el.dataset.f === 'd') t.auto = false;
+    if (el.dataset.f === 'p' && t.auto !== false){ t.d = el.value; $('td' + el.dataset.i).value = el.value; }
+  }
   else return;
   render();
 });
@@ -340,10 +345,13 @@ document.addEventListener('focusout', e => {
   el.value = el.dataset.fmt === 'money' ? P(el.value).toLocaleString('en-US',{minimumFractionDigits:2, maximumFractionDigits:2}) : i0(P(el.value));
   if (el.id === 'cp') S.cp = el.value; else if (el.id === 'opts') S.opts = el.value;
   else if (el.id === 'dpAmt' && S.dpMode === 'man') S.dpAmt = el.value;
-  else if (el.dataset.i !== undefined) S.trades[+el.dataset.i][el.dataset.f] = el.value;
+  else if (el.dataset.i !== undefined){ const t = S.trades[+el.dataset.i]; t[el.dataset.f] = el.value; if (el.dataset.f === 'p' && t.auto !== false){ t.d = el.value; $('td' + el.dataset.i).value = el.value; } }
   save();
 });
 $('lvl').addEventListener('change', e => { S.lvl = e.target.value; render(); });
+$('dpMode').addEventListener('change', e => { S.dpMode = e.target.value;
+  if (S.dpMode === 'man' && !has(S.dpAmt)) S.dpAmt = calc().newMoney.toLocaleString('en-US',{minimumFractionDigits:2, maximumFractionDigits:2});
+  fill(); render(); if (S.dpMode === 'man') $('dpAmt').focus(); });
 function applyEncore(){ const ep = ENC() ? encorePrice(S.encDate, BASE(S.prod)) : null; S.price = ep ? ep.p.toFixed(3) : ''; $('price').value = S.price; }
 $('prod').addEventListener('change', e => { S.prod = e.target.value; $('encBox').hidden = !ENC(); applyEncore(); render(); if (ENC() && !S.encDate) $('encDate').focus(); });
 $('encDate').addEventListener('change', e => { S.encDate = e.target.value; applyEncore(); render(); });
@@ -360,9 +368,9 @@ document.addEventListener('click', e => {
     if (k === 'dpMode' && v === 'man') $('dpAmt').focus();
     return;
   }
-  if (b.id === 'add'){ S.trades.push({p:'', d:'', r:''}); renderTrades(); render(); $('tp1').focus(); return; }
+  if (b.id === 'add'){ S.trades.push({p:'', d:'', r:'', auto:true}); renderTrades(); render(); $('tp1').focus(); return; }
   if (b.dataset.rm !== undefined){ S.trades.splice(+b.dataset.rm, 1); renderTrades(); render(); return; }
-  if (b.id === 'reset'){ S = structuredClone(DEF); Object.assign(S, {cp:'', lvl:'', opts:'', price:'', encDate:'', dpAmt:'', trades:[{p:'', d:'', r:''}]}); fill(); render(); $('cp').focus(); }
+  if (b.id === 'reset'){ S = structuredClone(DEF); Object.assign(S, {cp:'', lvl:'', opts:'', price:'', encDate:'', dpAmt:'', trades:[{p:'', d:'', r:'', auto:true}]}); fill(); render(); $('cp').focus(); }
 });
 
 fill(); render();
