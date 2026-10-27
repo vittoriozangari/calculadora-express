@@ -230,14 +230,18 @@ function calc(){
   const closing = tr.length ? 1225 + 150 * (tr.length - 1) : 925;
   const finalPrice = netInc - disc + closing;
   const base = list - disc;
-  const newMoney = S.dpMode === 'man' ? Math.max(0, c2(P(S.dpAmt))) : Math.max(0, c2(base * P(S.dpMode) / 100 - equity));
+  // 20% rate needs 20% NEW money on the incremental amount; equity does not count toward it
+  const incr = Math.max(0, netInc - disc);
+  const newMoney = S.dpMode === 'man' ? Math.max(0, c2(P(S.dpAmt)))
+    : S.dpMode === '20' ? Math.max(0, c2(base * 0.20 - equity), c2(incr * 0.20))
+    : Math.max(0, c2(base * 0.10 - equity));
   const dp = c2(equity + newMoney);
   const dpPct = base > 0 ? dp / base * 100 : 0;
   const amount = c2(base - (equity + newMoney) + closing);
   const oldBal = tr.reduce((a,t) => a + (t.p - t.d), 0);
   const oldInt = tr.reduce((a,t) => a + (t.p - t.d) * t.r, 0);
   const champ = S.term === '180' && netInc >= 200000;
-  const tierDP = dpPct >= 20 - 1e-9 ? 20 : 10;
+  const tierDP = incr > 0 && newMoney >= c2(incr * 0.20) - 0.005 ? 20 : 10;
   const newRate = champ ? CHAMP : RATES[S.term][tierDP];
   let rate = newRate;
   if (!champ && oldBal > 0 && amount > 0) rate = c2((oldInt + (amount - oldBal) * newRate) / amount);
