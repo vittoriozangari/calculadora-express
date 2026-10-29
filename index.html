@@ -100,7 +100,10 @@ button:focus-visible, input:focus-visible, select:focus-visible{outline:2px soli
 .line.pay{flex:1.3; background:var(--accent); color:var(--accent-ink)}
 .line.pay .k,.line.pay .s{color:var(--accent-ink); opacity:.85}
 .line.pay .v{font-size:clamp(24px,4vh,34px)}
-.line.inc .v{color:var(--gold); font-size:clamp(17px,2.6vh,22px)}
+.line.inc{grid-template-columns:1fr auto 1fr; gap:6px}
+.line.inc .ic .v{color:var(--gold); font-size:clamp(17px,2.6vh,22px); text-align:left}
+.line.inc .ic.r{text-align:right} .line.inc .ic.r .v{text-align:right}
+.line.inc .or{font-size:12px; font-weight:700; color:var(--muted); letter-spacing:.08em}
 .seg.mini{margin-top:4px; padding:2px; gap:2px; display:inline-grid}
 .seg.mini button{padding:5px 9px; font-size:12.5px}
 .line > .seg.mini{margin-top:0; min-width:150px}
@@ -158,7 +161,7 @@ button:focus-visible, input:focus-visible, select:focus-visible{outline:2px soli
     <div class="line key pay"><div><div class="k">Monthly Payments</div><div class="s" id="oPayS"></div></div><div class="v" id="oPay">$0</div></div>
     <div class="line"><div><div class="k">Interest</div><div class="s" id="oRateS"></div></div><div class="v" id="oRate">0%</div></div>
     <div class="line"><div class="k">Months</div><div class="seg mini" id="term"><button type="button" data-v="120">120</button><button type="button" data-v="180">180</button></div></div>
-    <div class="line inc"><div><div class="k">T1 or B.O</div><div class="s" id="oBO"></div></div><div class="v" id="oTier">—</div></div>
+    <div class="line inc"><div class="ic"><div class="k">Bonus Options</div><div class="v" id="oBO">—</div></div><div class="or">OR</div><div class="ic r"><div class="k">Tier</div><div class="v" id="oTier">—</div></div></div>
   </div>
   <div class="flag" id="flag" hidden></div>
 
@@ -274,8 +277,8 @@ function renderTrades(){
 
 function blank(){
   $('pkg').innerHTML = S.mode === 'lvl' ? 'Pick an OBL to quote.' : 'Enter the Options to quote.';
-  ['oFinal','oPay','oRate','oTier'].forEach(id => $(id).textContent = '—');
-  ['oFinalS','oPayS','oRateS','oBO'].forEach(id => $(id).textContent = '');
+  ['oFinal','oPay','oRate','oTier','oBO'].forEach(id => $(id).textContent = '—');
+  ['oFinalS','oPayS','oRateS'].forEach(id => $(id).textContent = '');
   if (document.activeElement !== $('dpAmt') && S.dpMode !== 'man') $('dpAmt').value = '';
   $('flag').hidden = true;
   save();
@@ -300,7 +303,7 @@ function render(){
   $('oPay').textContent = m2(R.pay);
   $('oPayS').textContent = `× ${S.term} months`;
   $('oTier').textContent = R.tier || 'No tier';
-  $('oBO').textContent = R.bo ? `or ${i0(R.bo)} Bonus Options` : 'No Bonus Options';
+  $('oBO').textContent = R.bo ? i0(R.bo) : 'None';
 
   const f = [];
   const bk = BASE(S.prod);
