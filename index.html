@@ -174,15 +174,19 @@ const MINS = {EY:37000, EOY:50000};
 const LIST = {EY:0.498, EOY:0.571};
 const BASE = p => p.endsWith('EOY') ? 'EOY' : 'EY';
 // Encore Price Freeze — Aventuras rows from 6/30/2025 on (same as the Pro). 18-month freeze window.
-const FREEZE = [['2026-09-30',0.498,0.571],['2026-06-30',0.498,0.571],['2026-03-31',0.498,0.571],['2025-09-30',0.495,0.568],['2025-07-31',0.495,0.568],['2025-06-30',0.495,0.568]];
+const FREEZE = [['2026-03-31',0.498,0.571],['2025-06-30',0.495,0.568],['2024-06-30',0.493,0.565]]; // price start dates, newest first
+const iso = d => d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+function limit18(){ const t = new Date(); let y = t.getFullYear(), m = t.getMonth() - 18, d = t.getDate();
+  while (m < 0){ m += 12; y--; }
+  const last = new Date(y, m + 1, 0).getDate(); return iso(new Date(y, m, Math.min(d, last))); }
 function encorePrice(dateStr, base){
   const col = base === 'EOY' ? 2 : 1;
   if (!dateStr) return null;
-  const sale = new Date(dateStr + 'T12:00:00'), lim = new Date(); lim.setMonth(lim.getMonth() - 18);
-  if (sale < lim) return {p:FREEZE[0][col], note:'Over 18 months · current price'};
-  const row = FREEZE.find(r => r[0] <= dateStr) || FREEZE[FREEZE.length - 1];
+  if (dateStr < limit18()) return {p:FREEZE[0][col], note:'Over 18 months · current price'};
+  const row = FREEZE.find(r => r[0] <= dateStr);
+  if (!row) return {p:FREEZE[0][col], note:'Over 18 months · current price'};
   const [y,m,d] = row[0].split('-');
-  return {p:row[col], note:`Price freeze ${+m}/${+d}/${y}`};
+  return {p:row[col], note:`Price freeze since ${+m}/${+d}/${y}`};
 }
 const ENC = () => S.prod.startsWith('ENC');
 const LEVELS = [['Select',4000],['Executive',7000],['Presidential',10000],["Chairman's Club",15000],['Reserve',25000],['Pinnacle',40000]];
