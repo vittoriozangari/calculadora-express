@@ -110,6 +110,9 @@ button:focus-visible, input:focus-visible, select:focus-visible{outline:2px soli
 .line > .seg.mini button{padding:7px 12px; font-size:14px}
 .dpsel{margin-top:4px; width:112px} .dpsel select{font-size:15px; padding:7px 28px 6px 10px}
 .dpf{width:clamp(130px,38vw,170px)}
+.seg button:disabled{opacity:.3; cursor:not-allowed}
+.ficosel{margin-top:4px; width:165px} .ficosel select{font-size:14px; padding:6px 26px 5px 10px}
+.line .rt{text-align:right} .line .rt .s{text-align:right}
 .dpf input{text-align:right}
 /* Key rows: Final Price, Down Payment, Monthly Payments — same weight, same size */
 .line.key{flex:1.25; background:var(--surface); border:2px solid var(--accent)}
@@ -123,10 +126,9 @@ button:focus-visible, input:focus-visible, select:focus-visible{outline:2px soli
 .line:not(.key) .v{font-size:clamp(16px,2.4vh,20px)}
 .line:not(.key){flex:.85}
 #encBox{flex:1.35} #encBox input{font-size:13.5px; padding-inline:4px} .row > .fld:has(#price){flex:.75}
-@media (max-height:720px){ .line{padding:3px 10px} #oFinalS,#oRateS{display:none} .seg.mini{margin-top:2px} .seg.mini button{padding:4px 8px} }
+@media (max-height:720px){ .wrap{gap:5px} .trades{gap:5px} .ficosel{margin-top:1px} .ficosel select{padding:3px 24px 2px 8px; font-size:13px} .line{padding:3px 10px} #oFinalS,#oRateS{display:none} .seg.mini{margin-top:2px} .seg.mini button{padding:4px 8px} }
 </style>
-</head>
-<body>
+</head><body>
 
 <div class="wrap">
   <header class="top">
@@ -159,7 +161,7 @@ button:focus-visible, input:focus-visible, select:focus-visible{outline:2px soli
       <div class="fld sel dpsel"><select id="dpMode" aria-label="Down payment %"><option value="10">10%</option><option value="15">15%</option><option value="20">20%</option><option value="man">Manual</option></select></div></div>
       <div class="fld dpf"><label for="dpAmt">New Money</label><input id="dpAmt" inputmode="decimal" data-fmt="money"></div></div>
     <div class="line key pay"><div><div class="k">Monthly Payments</div><div class="s" id="oPayS"></div></div><div class="v" id="oPay">$0</div></div>
-    <div class="line"><div><div class="k">Interest</div><div class="s" id="oRateS"></div></div><div class="v" id="oRate">0%</div></div>
+    <div class="line"><div><div class="k">Interest</div><div class="fld sel ficosel"><select id="fico" aria-label="Credit score"></select></div></div><div class="rt"><div class="v" id="oRate">0%</div><div class="s" id="oRateS"></div></div></div>
     <div class="line"><div class="k">Months</div><div class="seg mini" id="term"><button type="button" data-v="120">120</button><button type="button" data-v="180">180</button></div></div>
     <div class="line inc"><div class="ic"><div class="k">Bonus Options</div><div class="v" id="oBO">—</div></div><div class="or">OR</div><div class="ic r"><div class="k">Tier</div><div class="v" id="oTier">—</div></div></div>
   </div>
@@ -191,8 +193,17 @@ function encorePrice(dateStr, base){
 const ENC = () => S.prod.startsWith('ENC');
 const LEVELS = [['Select',4000],['Executive',7000],['Presidential',10000],["Chairman's Club",15000],['Reserve',25000],['Pinnacle',40000]];
 // Owner / Reload rates, MVW grid Sep 9 2026 (same as COTIZA)
-const RATES = {120:{10:17.24, 20:15.99, lab:'FICO 600'}, 180:{10:16.49, 20:16.49, lab:'FICO 640'}};
-const CHAMP = 9.99;
+// Rate by credit score band: r[term] = [10% down, 20% new-money down]. '' = Standard (600 at 120 mo, 640 at 180 mo, as before).
+const FICO = {
+  '':   {n:'Standard (600 / 640)', lab:'Standard', r:{120:[17.24,15.99], 180:[16.49,16.49]}},
+  '750':{n:'FICO 750+',       lab:'FICO 750+',     r:{120:[13.24,12.99], 180:[14.49,14.49]}, champ:true},
+  '700':{n:'FICO 700–749',    lab:'FICO 700–749',  r:{120:[13.99,13.49], 180:[15.49,15.49]}, champ:true},
+  '680':{n:'FICO 680–699',    lab:'FICO 680–699',  r:{120:[15.24,15.24], 180:[16.49,16.49]}, champ:true},
+  '640':{n:'FICO 640–679',    lab:'FICO 640–679',  r:{120:[15.24,15.24], 180:[16.49,16.49]}},
+  '600':{n:'FICO 600–639', lab:'FICO 600–639', r:{120:[17.24,15.99]}},
+  'x':  {n:'No FICO / 550–599', lab:'No FICO / 550–599', r:{120:[17.74,17.74]}, minDP:35}
+};
+const CHAMPR = {120:7.99, 180:9.99};   // Champion: FICO 680+ and incremental purchase >= $200,000, 10% down
 // Premier Vacations tier by Net incremental (WAC Annual, Oct 20 2026 matrix)
 const TIERS = [[373998,'Tier 25'],[224598,'Tier 20'],[149898,'Tier 15'],[105078,'Tier 10'],[75198,'Tier 5'],[45318,'Tier 3'],[22908,'Tier 1']];
 // Matrix packages: every 1,000 from 25,000 plus the published odd sizes
@@ -200,7 +211,7 @@ const PKGS = [20700,25800,30500,51700,67100,95700,134200,148100,176700];
 for (let p = 25000; p <= 999000; p += 1000) PKGS.push(p);
 PKGS.sort((a,b) => a-b);
 
-const DEF = {cp:'3,000', price:'', mode:'lvl', prod:'EY', lvl:'10000', opts:'', trades:[{p:'25,000', d:'2,000', r:'13.99', auto:false}], dpMode:'10', dpAmt:'', term:'120', encDate:''};
+const DEF = {cp:'3,000', price:'', mode:'lvl', prod:'EY', lvl:'10000', opts:'', trades:[{p:'25,000', d:'2,000', r:'13.99', auto:false}], dpMode:'10', dpAmt:'', term:'120', encDate:'', fico:''};
 const KEY = 'aventuraExpres.v2';
 let S; try { S = Object.assign(structuredClone(DEF), JSON.parse(localStorage.getItem(KEY) || '{}')); } catch(e){ S = structuredClone(DEF); }
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch(e){} };
@@ -248,18 +259,20 @@ function calc(){
   const amount = c2(base - (equity + newMoney) + closing);
   const oldBal = tr.reduce((a,t) => a + (t.p - t.d), 0);
   const oldInt = tr.reduce((a,t) => a + (t.p - t.d) * t.r, 0);
-  const champ = S.term === '180' && netInc >= 200000;
+  const F = FICO[S.fico] || FICO[''];
+  const term = F.r[S.term] ? S.term : '120';
+  const champ = netInc >= 200000 && (F.champ || (S.fico === '' && term === '180'));
   const tierDP = incr > 0 && newMoney >= c2(incr * 0.20) - 0.005 ? 20 : 10;
-  const newRate = champ ? CHAMP : RATES[S.term][tierDP];
+  const newRate = champ ? CHAMPR[term] : F.r[term][tierDP === 20 ? 1 : 0];
   let rate = newRate;
   if (!champ && oldBal > 0 && amount > 0) rate = c2((oldInt + (amount - oldBal) * newRate) / amount);
-  const pay = amount > 0 ? pmt(amount, rate, +S.term) : 0;
+  const pay = amount > 0 ? pmt(amount, rate, +term) : 0;
   const tier = eoy ? null : (TIERS.find(t => netInc >= t[0]) || [0,null])[1];
   let pk = 0; for (const p of PKGS){ if (Math.round(p * price / div) <= netInc) pk = p; else break; }
   const bo = pk / div;
   const newCP = cpOf(opts) / div;
   const cpAfter = cp + newCP;
-  return {newCP, eoy, price, cp, reached, opts, list, tr, equity, netInc, pct, disc, closing, finalPrice, base, dp, dpPct, newMoney, amount, oldBal, champ, newRate, rate, pay, tier, bo, cpAfter};
+  return {F, term, newCP, eoy, price, cp, reached, opts, list, tr, equity, netInc, pct, disc, closing, finalPrice, base, dp, dpPct, newMoney, amount, oldBal, champ, newRate, rate, pay, tier, bo, cpAfter};
 }
 
 function renderLevels(){
@@ -303,9 +316,9 @@ function render(){
   $('oFinal').textContent = m0(R.finalPrice);
   $('oFinalS').textContent = `Closing ${m0(R.closing)} incl.`;
   $('oRate').textContent = R.rate.toFixed(2) + '%';
-  $('oRateS').textContent = R.champ ? 'Champion · no blend' : `${RATES[S.term].lab} · new ${R.newRate.toFixed(2)}%`;
+  $('oRateS').textContent = R.champ ? 'Champion · no blend' : `new ${R.newRate.toFixed(2)}%`;
   $('oPay').textContent = m2(R.pay);
-  $('oPayS').textContent = `× ${S.term} months`;
+  $('oPayS').textContent = `× ${R.term} months`;
   $('oTier').textContent = R.tier || 'No tier';
   $('oBO').textContent = R.bo ? i0(R.bo) : 'None';
 
@@ -315,7 +328,8 @@ function render(){
   if (ENC() && !has(S.price)) f.push(`Pick the Encore sale date or type the price (using ${LIST[bk].toFixed(3)} for now).`);
   const ep = ENC() ? encorePrice(S.encDate, bk) : null;
   if (ep) $('pkg').innerHTML += ` · <b>${ep.note}</b>`;
-  if (S.dpMode === 'man' && R.dpPct < 10 - 1e-9) f.push('New money + equity is below 10% down payment.');
+  if (R.F.minDP && R.dpPct < R.F.minDP - 1e-9) f.push(`${R.F.lab} requires ${R.F.minDP}% down payment.`);
+  else if (S.dpMode === 'man' && R.dpPct < 10 - 1e-9) f.push('New money + equity is below 10% down payment.');
   if (R.amount > 0 && R.amount < 7000) f.push('Minimum amount to finance is $7,000.');
   if (R.amount > 100000) f.push('Goes to Credit Committee.');
   $('flag').hidden = !f.length; $('flag').innerHTML = f.join('<br>');
@@ -328,7 +342,10 @@ function fill(){
   $('cp').value = S.cp; $('price').value = S.price; $('opts').value = S.opts;
   $('dpAmt').value = S.dpMode === 'man' ? S.dpAmt : '';
   $('dpAmt').readOnly = S.dpMode !== 'man';
-  setSeg('mode', S.mode); $('prod').value = S.prod; $('dpMode').value = S.dpMode; setSeg('term', S.term);
+  setSeg('mode', S.mode); $('prod').value = S.prod; $('dpMode').value = S.dpMode; if (!(FICO[S.fico] || FICO['']).r[S.term]) S.term = '120';
+  setSeg('term', S.term);
+  $('fico').innerHTML = Object.entries(FICO).map(([k,v]) => `<option value="${k}">${v.n}</option>`).join(''); $('fico').value = S.fico;
+  $('term').querySelector('[data-v="180"]').disabled = !(FICO[S.fico] || FICO['']).r[180];
   $('lvlBox').hidden = S.mode !== 'lvl'; $('optBox').hidden = S.mode !== 'opt';
   renderLevels(); renderTrades();
 }
@@ -355,6 +372,7 @@ document.addEventListener('focusout', e => {
   else if (el.dataset.i !== undefined){ const t = S.trades[+el.dataset.i]; t[el.dataset.f] = el.value; if (el.dataset.f === 'p' && t.auto !== false){ t.d = el.value; $('td' + el.dataset.i).value = el.value; } }
   save();
 });
+$('fico').addEventListener('change', e => { S.fico = e.target.value; fill(); render(); });
 $('lvl').addEventListener('change', e => { S.lvl = e.target.value; render(); });
 $('dpMode').addEventListener('change', e => { S.dpMode = e.target.value;
   if (S.dpMode === 'man' && !has(S.dpAmt)) S.dpAmt = calc().newMoney.toLocaleString('en-US',{minimumFractionDigits:2, maximumFractionDigits:2});
@@ -382,7 +400,6 @@ document.addEventListener('click', e => {
 
 fill(); render();
 </script>
-
 <script>if ('serviceWorker' in navigator) window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(()=>{}));</script>
 </body>
 </html>
